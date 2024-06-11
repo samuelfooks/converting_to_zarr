@@ -1,0 +1,9 @@
+*.zarr
+*.tif
+*.shp
+*.gdb/
+*.tif.aux.xml
+*tif.ovr
+*.xml
+*.zip
+/.venv

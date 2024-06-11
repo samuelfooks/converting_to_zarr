@@ -1,0 +1,11 @@
+xarray
+zarr
+geopandas
+numpy
+netcdf4
+rasterio
+requests
+dask
+tqdm
+matplotlib
+cartopy
