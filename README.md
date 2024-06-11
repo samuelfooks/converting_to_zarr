@@ -30,6 +30,8 @@ https://zarr.readthedocs.io/en/stable/getting_started.html
 
 ## Getting Started
 
-To get started, clone this repository and navigate to the **tutorial** directory. Each part of the tutorial has its own directory with a README.md file that provides step-by-step instructions.
+Each part of the tutorial has its own directory with a README.md file that provides an outline of what each conversion process does.
 
 Happy converting!
+
+Licence: CC BY-4.0
