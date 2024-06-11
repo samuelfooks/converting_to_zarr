@@ -4,18 +4,7 @@ This Python script is part of a tutorial series on converting vector data to Zar
 
 ## Dependencies
 
-The script uses several Python libraries, including:
-
-- geopandas
-- xarray
-- numpy
-- rasterio
-- fiona
-- pandas
-- dask
-- requests
-- shapely
-- tqdm
+    pip install -r requirements.txt
 
 ## How it Works
 
@@ -45,26 +34,16 @@ This script is part of a tutorial series and is intended for educational purpose
 
 For those who prefer a containerized deployment, we provide a Dockerfile. This Dockerfile creates a Docker image with Python 3.9 as the base image. It sets up the necessary environment, including the installation of required packages, and prepares the application for execution.
 
-The Dockerfile performs the following steps:
 
-1. Uses Python 3.9 as the base image.
-2. Sets the working directory in the container to `/app`.
-3. Creates a directory `/zipfiles` for storing zip files.
-4. Adds permissions for accessing the `/zipfiles` directory.
-5. Installs `wget` using `apt-get`.
-6. Copies the contents of the current directory into the `/app` directory in the container.
-7. Installs Python packages specified in `requirements.txt` using `pip`.
-8. Exposes port 80 for outside access.
-9. Sets an environment variable `ARCO_ASSET_TEMP_DIR` to `/output-data`.
-10. Sets the command to run `shp_to_zarr.py` when the container launches.
-11. You need to supply a zip url and the name for the data variable to be used for the zarr dataset.
+You need to supply a zip url and the resolution to be used for the rasterization as environment variables when running the image.
+
 To build the Docker image, you need to have Docker installed on your machine. Navigate to the directory containing the Dockerfile and run the following command:
 
 ```bash
 docker build -t shptozarr-tut .
 
-docker run -it shptozarr-tut
+docker run -it shptozarr-tut python shp_to_zarr.py <you zip url> <spatial resolution>
 
 ```
 
-**If you choose a resolution finer than 0.01 degrees expect the conversion to take a while, unless you utilize either distributed computation services or HPC resources**
+**If you choose a resolution finer than 0.01 degrees expect the resource consumption to be heavier than a laptop with 16GB of RAM and a 12 Core Intel i7 processor

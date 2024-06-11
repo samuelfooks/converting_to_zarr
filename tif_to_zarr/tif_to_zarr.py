@@ -55,7 +55,7 @@ def attributes_update(dataset, title, resolution, zip_url):
       
         dataset.attrs['Comment'] = f"Downloaded from {zip_url} Converted from data product {title}.tif on {datetime.today()}"
         return dataset
-def tif2zarr(file_path, band_variable, arco_asset_temp_dir, zip_url):
+def tif2zarr(file_path, variable, arco_asset_temp_dir, zip_url):
     
 
     with rasterio.open(file_path) as src:
@@ -67,7 +67,7 @@ def tif2zarr(file_path, band_variable, arco_asset_temp_dir, zip_url):
     # Open the file in chunks
     da = rxr.open_rasterio(file_path, chunks=chunk_size)
     # Assign a name to the DataArray
-    da.name = band_variable
+    da.name = variable
     # Convert the DataArray to a Dataset
     ds = da.to_dataset()
     # Rename the 'band' dimension to 'kdpar'
@@ -77,7 +77,7 @@ def tif2zarr(file_path, band_variable, arco_asset_temp_dir, zip_url):
     ds = ds.sortby('latitude')
 
     ds = ds.chunk({'latitude': chunk_size, 'longitude': chunk_size})
-    ds[band_variable]= ds[band_variable].chunk({'latitude' : chunk_size, 'longitude': chunk_size})
+    ds[variable]= ds[variable].chunk({'latitude' : chunk_size, 'longitude': chunk_size})
     # Get the band number and variable names
     variable_names = list(ds.data_vars)
     resolution = abs(ds.latitude.values[0] - ds.latitude.values[1])
@@ -86,7 +86,7 @@ def tif2zarr(file_path, band_variable, arco_asset_temp_dir, zip_url):
     ds.attrs['band_descriptions'] = band_descriptions
     ds.attrs['variables'] = variable_names
     ds = attributes_update(ds, title, resolution, zip_url)
-    zarr_path = f'{arco_asset_temp_dir}/{band_variable}.zarr'
+    zarr_path = f'{arco_asset_temp_dir}/{variable}.zarr'
     with dask.config.set(scheduler='threads'):  # use the threaded scheduler
         ds.to_zarr(zarr_path, mode='w')
     return zarr_path
@@ -115,12 +115,12 @@ if __name__ == "__main__":
         print('Usage: python tif_to_zarr.py <zip_url> <band_variable>')
         sys.exit(1)
     zip_url = sys.argv[1]
-    band_variable = sys.argv[2]
+    variable = sys.argv[2]
     arco_asset_temp_dir = os.environ.get('ARCO_ASSET_TEMP_DIR')
 
     # defaults for testing
     # zip_url = "https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_seabed_habitats/environmental_variables_that_influence_habitat_type_optical_properties/ratio_of_depth_to_seabed_secchi_disk_depth_in_baltic_sea/baltic_secchi_disk_depth_ratio.zip"
-    # band_variable = 'secchi_disk_water_depth_ratio"
+    # variable = 'secchi_disk_water_depth_ratio"
     # arco_asset_temp_dir = 'data'
     # zipdir = 'zipfiles'
     # os.makedirs(zipdir, exist_ok=True)
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     permissions = stat.filemode(os.stat(tif_file_path).st_mode)
     if tif_file_path:
         metadata_dict = {}  # Add your metadata here
-        zarr_path = tif2zarr(tif_file_path, band_variable, arco_asset_temp_dir, zip_url)
+        zarr_path = tif2zarr(tif_file_path, variable, arco_asset_temp_dir, zip_url)
         print(f'Zarr file saved at {zarr_path}')
 
 

@@ -80,22 +80,22 @@ def attributes_update(dataset, title, resolution, zipurl):
         return dataset
 
 # %% [markdown]
-# 
-# ### Converting GeoDataFrame to Zarr Format
-# 
 # The `gdf2zarrconverter` function converts spatial data from a GeoDataFrame into a Zarr store.
-# 
-# **Steps:**
-# 
-# 1. Data Cleaning: Ensures uniformity by cleaning various input data types.
-# 2. Spatial Extent Determination: Calculates the bounding box of the GeoDataFrame.
-# 3. Resolution and Dimensions Calculation: Determines raster resolution, width, and height based on spatial extent.
-# 4. Data Preparation: Separates columns into categorical and numerical, cleans missing data, and encodes categorical columns numerically.
-# 5. Rasterization: Converts categorical and numerical data into raster layers.
-# 6. Creating Xarray Dataset: Constructs a dataset to hold raster layers and category mappings, and sets latitude and longitude coordinates.
-# 7. Attributes and Metadata: Sets categorical encoding to each variable.
-# 8. Saving to Zarr: Saves the dataset to a Zarr store in the specified directory.
 
+### Parameters
+# - `file_path`: Path to the input file.
+# - `native_var`: Variable in the data to be processed.
+# - `title`: Title for the output dataset.
+# - `layer`: Layer of the geospatial data to be processed.
+# - `arco_asset_tmp_path`: Temporary path for storing the output Zarr file.
+# - `zipurl`: URL of the zip file containing the data.
+
+# ### Returns
+# - `zarr_var_path`: Path to the output Zarr file.
+
+# ### Description
+# This function converts a geospatial data file into a Zarr file. It cleans and encodes the data, rasterizes the geometries, creates an xarray dataset, and saves it as a Zarr file.
+# The resolution is set at 0.01 degrees, but can be adjusted.  Be aware this will consume more memory and processing time.
 # %%
 def gdf2zarrconverter(file_path, native_var, title, layer, arco_asset_tmp_path, zipurl):
 
@@ -172,7 +172,14 @@ def gdf2zarrconverter(file_path, native_var, title, layer, arco_asset_tmp_path, 
 
 
 # %% [markdown]
-#  5.  In this example we will use a multi-layer geodatabase featuring different layers of geological seabed substrate data taken from EMODnet Geology (https://emodnet.ec.europa.eu/geonetwork/srv/eng/catalog.search#/metadata/6eaf4c6bf28815e973b9c60aab5734e3ef9cd9c4)
+# This Python script performs the following tasks:
+
+# 1. **Download and Extract Geodatabase**: Downloads a zip file from a specified URL and extracts the geodatabase file.
+# 2. **Geodatabase to Zarr Conversion**: Converts each layer and variable within the geodatabase into a Zarr dataset. This is done using a helper function `gdf2zarrconverter`.
+# 3. **Rechunking with Dask**: The script uses Dask to rechunk the variables for efficient computation and compatibility of the Zarr datasets. This lays the groundwork for distributed computations if necessary.
+# 4. **Combining Datasets**: The converted datasets are combined into a single Zarr dataset using `xr.merge`. This is done variable by variable to ensure compatibility.
+# 6. **Saving the Final Dataset**: The combined dataset is rechunked again using Dask and saved as a Zarr file.
+
 
 # %%
 

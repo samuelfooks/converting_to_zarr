@@ -6,4 +6,7 @@
 *tif.ovr
 *.xml
 *.zip
+
+
 /.venv
+/data
