@@ -10,15 +10,18 @@ https://zarr.readthedocs.io/en/stable/getting_started.html
 ### Install required dependencies
     mamba install --file requirements.txt
     mamba env update --file environment.yml --name convertzarrenv
-    
+
 ### geodatabase_to_zarr
 
 * Converting Geodatabases to Zarr using Fiona, Geopandas, Rasterio and Zarr
 * Comparing the converted dataset to the original
 
+**If you choose a resolution finer than 0.01 degrees expect the resource consumption to be heavier than a laptop with 16GB of RAM and a 12 Core Intel i7 processor
 ### shape_to_zarr
 
 * Converting Shape files to Zarr using Fiona, Geopandas, Rasterio and Zarr
+
+**If you choose a resolution finer than 0.01 degrees expect the resource consumption to be heavier than a laptop with 16GB of RAM and a 12 Core Intel i7 processor
 
 ### tif_to_zarr
 
