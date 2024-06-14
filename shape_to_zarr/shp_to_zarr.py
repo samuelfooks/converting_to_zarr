@@ -164,17 +164,17 @@ def gdf2zarrconverter(shp_file_path, variable, resolution, arco_asset_tmp_path, 
 
 if __name__ == "__main__":
 
-    if len(sys.argv) != 3:
-        print(f"Usage: python shp_to_zarr.py <zip_url> <resolution>")
-        sys.exit(1)
-    zip_url = sys.argv[1]
-    arco_asset_temp_dir = os.environ.get('ARCO_ASSET_TEMP_DIR')
-    resolution = sys.argv[2]
+    # if len(sys.argv) != 3:
+    #     print(f"Usage: python shp_to_zarr.py <zip_url> <resolution>")
+    #     sys.exit(1)
+    # zip_url = sys.argv[1]
+    # arco_asset_temp_dir = os.environ.get('ARCO_ASSET_TEMP_DIR')
+    # resolution = sys.argv[2]
     
     # defaults for testing
-    # zip_url = "https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/archive/human_activities_windfarms/EMODnet_HA_Energy_WindFarms_polygons_20231124.zip"
-    # arco_asset_temp_dir = 'data'
-    # resolution = "0.01" 
+    zip_url = "https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/archive/human_activities_windfarms/EMODnet_HA_Energy_WindFarms_polygons_20231124.zip"
+    arco_asset_temp_dir = 'data'
+    resolution = "0.01" 
     
     # Download and extract the zip file, then get the path to the .shp file
     shp_file_path = download_and_extract_zip(zip_url)
