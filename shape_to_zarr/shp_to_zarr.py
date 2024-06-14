@@ -172,6 +172,8 @@ if __name__ == "__main__":
     # resolution = sys.argv[2]
     
     # defaults for testing
+    zipdir = 'zipfiles'
+    os.makedirs(zipdir, exist_ok=True)
     zip_url = "https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/archive/human_activities_windfarms/EMODnet_HA_Energy_WindFarms_polygons_20231124.zip"
     arco_asset_temp_dir = 'data'
     resolution = "0.01" 

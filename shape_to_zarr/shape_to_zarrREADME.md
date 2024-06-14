@@ -30,20 +30,5 @@ The script outputs a Zarr dataset containing the data from the shapefile. The da
 
 This script is part of a tutorial series and is intended for educational purposes. It may not be suitable for production use without modification.
 
-## Docker Deployment
-
-For those who prefer a containerized deployment, we provide a Dockerfile. This Dockerfile creates a Docker image with Python 3.9 as the base image. It sets up the necessary environment, including the installation of required packages, and prepares the application for execution.
-
-
-You need to supply a zip url and the resolution to be used for the rasterization as environment variables when running the image.
-
-To build the Docker image, you need to have Docker installed on your machine. Navigate to the directory containing the Dockerfile and run the following command:
-
-```bash
-docker build -t shptozarr-tut .
-
-docker run -it shptozarr-tut python shp_to_zarr.py <you zip url> <spatial resolution>
-
-```
 
 **If you choose a resolution finer than 0.01 degrees expect the resource consumption to be heavier than a laptop with 16GB of RAM and a 12 Core Intel i7 processor

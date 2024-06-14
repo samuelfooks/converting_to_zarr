@@ -8,8 +8,9 @@ https://zarr.readthedocs.io/en/stable/getting_started.html
 ## Tutorial Outline
 
 ### Install required dependencies
-    pip install -r requirements.txt
-
+    mamba install --file requirements.txt
+    mamba env update --file environment.yml --name convertzarrenv
+    
 ### geodatabase_to_zarr
 
 * Converting Geodatabases to Zarr using Fiona, Geopandas, Rasterio and Zarr
@@ -18,14 +19,11 @@ https://zarr.readthedocs.io/en/stable/getting_started.html
 ### shape_to_zarr
 
 * Converting Shape files to Zarr using Fiona, Geopandas, Rasterio and Zarr
-* There is a Dockerfile included with the script, if you clone this repository locally and not on edito you can run the docker scripts and create your own zarr files or deploy it as a conversion process yourself
 
 ### tif_to_zarr
 
 * Converting Geotiff files to Zarr using Rasterio, Zarr
 * Comparing the converted dataset to the original
-
-* There is a Dockerfile included with the script, if you clone this repository locally and not on edito you can run the docker scripts and create your own zarr files or deploy it as a conversion process yourself
 
 
 ## Getting Started
