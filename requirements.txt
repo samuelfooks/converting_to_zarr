@@ -11,3 +11,5 @@ matplotlib
 cartopy
 rasterstats
 ipykernel
+dask-geopandas
+dask[distributed]
