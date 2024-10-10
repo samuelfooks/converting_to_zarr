@@ -6,7 +6,9 @@
 *tif.ovr
 *.xml
 *.zip
+*.prof
 
 
 /.venv
 /data
+/extracted_files

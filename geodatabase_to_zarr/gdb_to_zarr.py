@@ -16,9 +16,10 @@ import shutil
 from pyproj import CRS
 
 class ZarrConverter:
-    def __init__(self, zipurl, geodatabase, resolution=0.01, variables=None):
+    def __init__(self, zipurl, geodatabase, layer_index, resolution=0.01, variables=None):
         self.zipurl = zipurl
         self.geodatabase = geodatabase
+        self.layer_index = layer_index
         self.resolution = resolution
         self.variables = variables
         self.zip_file = os.path.basename(zipurl)
@@ -216,18 +217,23 @@ class ZarrConverter:
     def run(self):
         self.download_and_extract()
         for layer in self.gdblayers:
+            layer = self.gdblayers[self.layer_index]
 
             self.process_gdblayer(layer)
             self.combine_and_rechunk()
             self.update_and_finalize(layer)
-
+            break
 
 # zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_geology/seabed_substrate/multiscale_folk_5/EMODnet_GEO_Seabed_Substrate_All_Res.zip'
 # geodatabase = 'EMODnet_Seabed_Substrate_1M.gdb'
 # Download the zip file
 zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_human_activities/energy/wind_farms_points/EMODnet_HA_Energy_WindFarms_20240508.zip'
 geodatabase = 'EMODnet_HA_Energy_WindFarms_20240508.gdb'
+layer_index = 1
 
+# zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_seabed_habitats/12549/EUSeaMap_2023.zip'
+# geodatabase = 'EUSeaMap_2023.gdb'
+# layer_index = 0
 # resolution ~1 km
 resolution = 0.01
 
@@ -235,5 +241,5 @@ resolution = 0.01
 variables = []
 
 # establish a conversion object, and process each geodatabase layer into zarr datasets
-converter = ZarrConverter(zipurl, geodatabase, resolution=resolution, variables=variables)
+converter = ZarrConverter(zipurl, geodatabase, layer_index, resolution=resolution, variables=variables)
 converter.run()
