@@ -1,5 +1,3 @@
-# uses spatial indexing to save geometries.  Has worked for smaller datasets, now testing on larger datasets
-
 import fiona
 import pandas as pd
 import geopandas as gpd
@@ -26,11 +24,14 @@ import dask.delayed
 from affine import Affine
 import logging
 import sys
-from dask.distributed import LocalCluster, Client
 import psutil
 import time
 import threading
 import logging
+from memory_profiler import profile
+import gc
+import itertools
+import yaml
 
 def make_logger(name, log_file_path):
     logger = logging.getLogger(name)
@@ -46,7 +47,7 @@ def make_logger(name, log_file_path):
     console_handler.setFormatter(formatter)
 
     # Create file handler
-    file_handler = logging.FileHandler(log_file_path)
+    file_handler = logging.FileHandler(log_file_path, mode='w')
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
 
@@ -56,7 +57,7 @@ def make_logger(name, log_file_path):
 
     return logger
 
-def log_memory_usage(interval=5):
+def log_memory_usage(logger, interval=5):
     """
     Logs memory usage every `interval` seconds.
     Runs in a separate thread.
@@ -64,25 +65,46 @@ def log_memory_usage(interval=5):
     process = psutil.Process()
     while True:
         mem = process.memory_info().rss / (1024 * 1024)  # Convert to MB
-        logging.info(f"Current Memory Usage: {mem:.2f} MB")
+        logger.info(f"Current Memory Usage: {mem:.2f} MB")
         time.sleep(interval)
 
+log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+os.makedirs(log_dir, exist_ok=True)
+logger = make_logger('converter', f'{log_dir}/converter.log')
 
-logger = make_logger('converter', 'converter.log')
+def load_config():
+    config_path = os.getenv('CONFIG_PATH', 'config.yaml')
+    with open(config_path, 'r') as file:
+        config = yaml.safe_load(file)
+    print(config)  # Or use logging for better practice
+    return config
+
+
 
 class ZarrConverter:
-    def __init__(self, zipurl, geodatabase, layer_index, resolution=0.01, variables=None):
-        self.zipurl = zipurl
-        self.zip_file = os.path.basename(zipurl)
-        self.geodatabase = geodatabase
-        self.layer_index = layer_index
-        self.resolution = resolution
-        self.variables = variables
+    def __init__(self, config):
+
+        """
+        Initialize the ZarrConverter object.
+        param: zipurl: the url of the zip file containing the geodatabase
+        param: geodatabase: the name of the geodatabase
+        param: layer_index: the index of the layer to be processed
+        param: resolution: the resolution of the rasterized data
+        param: variables: the variables to be processed
+
+        """
+        self.zipurl = config.get('zipurl')
+        self.zip_file = os.path.basename(self.zipurl)
+        self.geodatabase = config.get('geodatabase')
+        self.layer_index = config.get('layer_index', 0)
+        self.resolution = config.get('resolution', 0.01)
+        self.variables = config.get('variables', [])
         self.script_dir = os.path.dirname(os.path.abspath(__file__))
-        self.data_dir = f"{self.script_dir}/../data"
+        self.data_dir = f"{self.script_dir}/data"
+        self.final_output_dir = f"{self.script_dir}/output-data"
         self.temp_zarr_path = f"{self.data_dir}/converted_zarr_files_spat"
         self.extract_dir = f"{self.data_dir}/extracted_files_spat"
-        for dir in [self.data_dir, self.temp_zarr_path, self.extract_dir]:
+        for dir in [self.data_dir, self.temp_zarr_path, self.extract_dir, self.final_output_dir]:
             os.makedirs(dir, exist_ok=True)
         # clean up the directories
         
@@ -90,13 +112,14 @@ class ZarrConverter:
             self.clean_dir(dir)
         self.zarr_vars_paths = []
         self.gdb_path = None
-        self.title = os.path.splitext(os.path.basename(geodatabase))[0]
+        self.title = os.path.splitext(os.path.basename(self.geodatabase))[0]
         self.crs = None
-        # Initialize the logger
-        self.setup_logger()
 
     def clean_dir(self, targetdir):
-        
+        """"
+        param: targetdir: the directory to be cleaned
+
+        """
         for root, dirs, files in os.walk(targetdir, topdown=False):
             # Remove all files
             for file in files:
@@ -112,6 +135,11 @@ class ZarrConverter:
 
 # add necessary metadata via the attributes of the zarr dataset
     def attributes_update(self, dataset):
+        """
+        param: dataset: the dataset to be updated with the necessary metadata
+
+        return: dataset: the updated dataset
+        """
         lon_min, lat_min, lon_max, lat_max = dataset.longitude.values.min(), dataset.latitude.values.min(), dataset.longitude.values.max(), dataset.latitude.values.max()
         latitudeattrs = {'_CoordinateAxisType': 'Lat',
                             'axis': 'Y',
@@ -145,6 +173,11 @@ class ZarrConverter:
 
 # function used to add _CRS attribute to each variable in the zarr dataset
     def update_crs(self, final_dataset):
+        """
+        param: final_dataset: the final dataset to be updated with the crs
+
+        return: final_dataset: the updated dataset
+        """
         if isinstance(self.crs, dict):
             crs_wkt = CRS.from_dict(self.crs).to_wkt()
         else:
@@ -155,6 +188,9 @@ class ZarrConverter:
 
 # download the zip file and find the specified geodatabase, and the geodatabase layers
     def download_and_extract(self):
+        """
+        Download the zip file, extract the contents, and find the geodatabase and its layers.
+        """
         class TqdmUpTo(tqdm):
             def update_to(self, b=1, bsize=1, tsize=None):
                 if tsize is not None:
@@ -162,21 +198,81 @@ class ZarrConverter:
                 self.update(b * bsize - self.n)
 
         with TqdmUpTo(unit='B', unit_scale=True, miniters=1, desc=self.zip_file) as t:
-            urllib.request.urlretrieve(self.zipurl, filename=self.zip_file, reporthook=t.update_to)
+            urllib.request.urlretrieve(self.zipurl, filename=f"{self.data_dir}/{self.zip_file}", reporthook=t.update_to)
 
-        with zipfile.ZipFile(self.zip_file, 'r') as zip_ref:
-            zip_ref.extractall('extracted_files')
+        with zipfile.ZipFile(f"{self.data_dir}/{self.zip_file}", 'r') as zip_ref:
+            zip_ref.extractall(self.extract_dir)
 
-        for root, dirs, files in os.walk('extracted_files'):
+        for root, dirs, files in os.walk(self.extract_dir):
             for dir in dirs:
                 if dir.endswith('.gdb') and os.path.basename(dir) == self.geodatabase:
                     self.gdb_path = os.path.join(root, dir)
                     self.gdblayers = fiona.listlayers(self.gdb_path)
                     break
 
+    def rasterize_chunk(self, chunk, raster_shape, transform):
+        """
+        param: chunk: the chunk to be rasterized
+        param: raster_shape: the shape of the raster
+        param: transform: the transform of the raster
+
+        return: raster_chunk: the rasterized chunk
+        """
+        raster_chunk = np.zeros(raster_shape, dtype=np.float32)
+
+        valid_geoms = (geom for geom in chunk['geometries'] if geom.is_valid)
+        if not valid_geoms:
+            return raster_chunk
+
+        shapes = ((geom, value) for geom, value in zip(valid_geoms, chunk['encoded_data']))
+        rasterio.features.rasterize(
+            shapes,
+            out=raster_chunk,
+            transform=transform,
+            merge_alg=rasterio.enums.MergeAlg.replace,
+            dtype=np.float32,
+        )
+
+        return raster_chunk
+
+    def cleaner(self, data):
+        """
+        param: data: the data to be cleaned
+        return: data: the cleaned data
+        """
+        if isinstance(data, str):
+            if data == '0' or data.strip() == '' or pd.isna(data):
+                return 'None'
+        return data
+
+    # encode the categorical data into numerical data
+    def encode_categorical(self, data, category_mapping):
+        """"
+        param: data: the data to be encoded
+        param: category_mapping: the dictionary to store the category mappings
+        return: encoded_data: the encoded data
+        return: category_mapping: the updated category mapping dictionary
+        """
+        if data.dtype == 'object':
+            data = pd.Series(data).fillna('None').replace({' ': 'None', '': 'None', '0': 'None'})
+            unique_categories = np.unique(data)
+            for category in unique_categories:
+                if category not in category_mapping:
+                    category_mapping[category] = len(category_mapping) + 1
+
+            encoded_data = data.map(category_mapping).values
+        else:
+            data = data.astype(np.float32)
+            data[np.isnan(data)] = 0
+            encoded_data = data
+        return encoded_data, category_mapping
 
     # for a given geodatabase layer and a variable, convert that variable from that layer into a zarr dataset 
-    def process_gdb_layer(self, layer):
+    #@profile
+    def vector_layer_to_zarr(self, layer):
+        """
+        param: layer: the layer to be converted to a zarr dataset
+        """
         vector_file = self.gdb_path
         arco_dir = self.temp_zarr_path
         title = os.path.splitext(os.path.basename(vector_file))[0]
@@ -186,46 +282,6 @@ class ZarrConverter:
 
         resolution = 0.01
 
-        def rasterize_chunk(chunk, raster_shape, transform):
-            raster_chunk = np.zeros(raster_shape, dtype=np.float32)
-
-            valid_geoms = [geom for geom in chunk['geometries'] if geom.is_valid]
-            if not valid_geoms:
-                return raster_chunk
-
-            shapes = ((geom, value) for geom, value in zip(valid_geoms, chunk['encoded_data']))
-            rasterio.features.rasterize(
-                shapes,
-                out=raster_chunk,
-                transform=transform,
-                merge_alg=rasterio.enums.MergeAlg.replace,
-                dtype=np.float32,
-            )
-
-            return raster_chunk
-
-        def cleaner(data):
-            if isinstance(data, str):
-                if data == '0' or data.strip() == '' or pd.isna(data):
-                    return 'None'
-            return data
-
-        def encode_categorical(data, category_mapping):
-            if data.dtype == 'object':
-                data = pd.Series(data).fillna('None')
-                data.replace({' ': 'None', '': 'None', '0': 'None'}, inplace=True)
-                unique_categories = np.unique(data)
-                for category in unique_categories:
-                    if category not in category_mapping:
-                        category_mapping[category] = len(category_mapping) + 1
-
-                encoded_data = data.map(category_mapping).values
-            else:
-                data = data.astype(np.float32)
-                data[np.isnan(data)] = 0
-                encoded_data = data
-            return encoded_data, category_mapping
-
         if self.variables is None:
             with fiona.open(vector_file, 'r', layer=layer) as src:
                 self.variables = list(src.schema['properties'].keys())
@@ -234,18 +290,16 @@ class ZarrConverter:
         self.category_mappings = {var: {} for var in self.variables}
 
         # Build a spatial index for all geometries in the layer
-        
         with fiona.open(vector_file, 'r', layer=layer) as src:
             logging.info(f"Building spatial index for layer: {layer} for {len(src)} features")
             spatial_index = rtree_index.Index()
-            geometries = []
-            with tqdm(total =len(src), desc='features') as pbar:
-                for fid, feature in enumerate(src):
-                    geom = shapely.geometry.shape(feature['geometry'])
-                    geometries.append(geom)
+            geometries = (shapely.geometry.shape(feature['geometry']) for feature in src)
+            geometries, geometries_copy = itertools.tee(geometries)
+            total_geometries = sum(1 for _ in geometries_copy)
+            with tqdm(total=total_geometries, desc='features') as pbar:
+                for fid, geom in enumerate(geometries):
                     spatial_index.insert(fid, geom.bounds)
                     pbar.update(1)
-
 
         for native_var in self.variables:
             logger.info(f"Processing variable: {native_var}")
@@ -257,11 +311,10 @@ class ZarrConverter:
                 height = int(np.ceil((lat_max - lat_min) / resolution))
                 raster_transform = rasterio.transform.from_bounds(lon_min, lat_min, lon_max, lat_max, width, height)
 
-                # Define chunk sizes
                 chunk_width = 1000
                 chunk_height = 1000
 
-                # Initialize Zarr store for the current variable
+
                 zarr_var_path = f"{arco_dir}/{title}_{native_var}.zarr"
                 logger.info(f"Initializing Zarr store at {zarr_var_path}")
 
@@ -301,8 +354,11 @@ class ZarrConverter:
                         chunk_data = []
                         # Find intersecting geometries using spatial index
                         intersecting_ids = list(spatial_index.intersection(window_geom.bounds))
-                        chunk_geoms = [geometries[fid] for fid in intersecting_ids if geometries[fid].intersects(window_geom)]
-
+                        # Use a generator to yield geometries one by one
+                        geometries = (shapely.geometry.shape(feature['geometry']) for feature in src)
+                        # Create a temporary dictionary to store intersecting geometries
+                        intersecting_geometries = {fid: geom for fid, geom in enumerate(geometries) if fid in intersecting_ids}
+                        chunk_geoms = [intersecting_geometries[fid] for fid in intersecting_ids if intersecting_geometries[fid].intersects(window_geom)]
                         if not chunk_geoms:
                             raster_chunk = np.zeros((window_height, window_width), dtype=np.float32)
                         else:
@@ -321,10 +377,10 @@ class ZarrConverter:
                                 chunk_data.append(feature['properties'][native_var])
 
                             if isinstance(chunk_data[0], str):
-                                chunk_data = [cleaner(d) for d in chunk_data]
+                                chunk_data = [self.cleaner(d) for d in chunk_data]
 
                             chunk_data = pd.Series(chunk_data).values
-                            encoded_data, self.category_mappings[native_var] = encode_categorical(
+                            encoded_data, self.category_mappings[native_var] = self.encode_categorical(
                                 chunk_data, self.category_mappings[native_var]
                             )
 
@@ -337,7 +393,8 @@ class ZarrConverter:
                             )
 
                             # Rasterize the chunk using Dask delayed
-                            lazy_raster = dask.delayed(rasterize_chunk)(
+                            
+                            lazy_raster = dask.delayed(self.rasterize_chunk)(
                                 {'geometries': chunk_geoms, 'encoded_data': encoded_data},
                                 (window_height, window_width),
                                 chunk_transform
@@ -345,20 +402,23 @@ class ZarrConverter:
                             # Compute the raster chunk
                             raster_chunk = da.from_delayed(
                                 lazy_raster, shape=(window_height, window_width), dtype=np.float32
-                            ).compute()
+                            )
 
                         # Assign the raster_chunk to the appropriate window in the DataArray
                         dataset[native_var].data[i:i+window_height, j:j+window_width] = raster_chunk
-
+                        # Clear chunk_data and chunk_geoms
+                        del chunk_data
+                        del chunk_geoms
                         logger.info(f"Finished processing window: rows {i}-{i+window_height}, cols {j}-{window_width}")
 
                 # After processing all chunks, assign category mappings as attributes
                 if self.category_mappings.get(native_var):
                     dataset[native_var].attrs['categorical_encoding'] = self.category_mappings[native_var]
-
+                
                 # Write the completed DataArray to Zarr
                 dataset.to_zarr(zarr_var_path, mode='a', compute=True)
-
+                del dataset
+                gc.collect()
                 self.zarr_vars_paths.append(zarr_var_path)
                 logger.info(f"Finished processing variable: {native_var}")
 
@@ -380,6 +440,7 @@ class ZarrConverter:
         except Exception as e:
             logger.error(f"Error combining zarr files: {e}")
             return None
+
 # update the final combined dataset from each gdb layer with necessary metadata and attributes
     def update_and_finalize(self, gdblayer):
         categorical_encodings_dict = {}
@@ -392,7 +453,7 @@ class ZarrConverter:
         try:
             final_dataset = self.combined_dataset.chunk({'latitude': 'auto', 'longitude': 'auto'})
             final_dataset = self.update_crs(final_dataset)
-            zarr_path = f"{self.temp_zarr_path}/geodatabase_to_zarr/{gdblayer}_{self.title}.zarr"
+            zarr_path = f"{self.final_output_dir}/{gdblayer}_{self.title}.zarr"
             final_dataset = self.attributes_update(final_dataset)
             final_dataset.to_zarr(zarr_path, mode='w', consolidated=True)
         except Exception as e:
@@ -403,42 +464,27 @@ class ZarrConverter:
     def run(self):
         self.download_and_extract()
         #Start memory logging in a separate thread
-        memory_thread = threading.Thread(target=log_memory_usage, args=(5,), daemon=True)
+        # Start memory logging in a separate thread with the 'converter' logger
+        memory_thread = threading.Thread(target=log_memory_usage, args=(logger,), daemon=True)
         memory_thread.start()
         for layer in self.gdblayers:
             layer = self.gdblayers[self.layer_index]
-            self.process_gdb_layer(layer)
+            self.vector_layer_to_zarr(layer)
             self.combine_and_rechunk()
             self.update_and_finalize(layer)
             break
 
 def main():
-    # zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_geology/seabed_substrate/multiscale_folk_5/EMODnet_GEO_Seabed_Substrate_All_Res.zip'
-    # geodatabase = 'EMODnet_Seabed_Substrate_1M.gdb'
-    # layer_index = 0
-
-    zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_human_activities/energy/wind_farms_points/EMODnet_HA_Energy_WindFarms_20240508.zip'
-    geodatabase = 'EMODnet_HA_Energy_WindFarms_20240508.gdb'
-    layer_index = 1
-    variables = ['COUNTRY', 'POWER_MW', 'STATUS']
-
-    # zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_seabed_habitats/12549/EUSeaMap_2023.zip'
-    # geodatabase = 'EUSeaMap_2023.gdb'
-    # layer_index = 0
-    # variables = ['EUNIS2019C', 'Energy', 'Substrate', 'Biozone']
-    # resolution ~1 km
-    resolution = 0.01
-
-
-    # establish a conversion object, and process each geodatabase layer into zarr datasets
-    converter = ZarrConverter(zipurl, geodatabase, layer_index, resolution=resolution, variables=variables)
-    converter.run()
+    converter = ZarrConverter(config)
+    try:
+        converter.run()
+    except Exception as e:
+        logger.error(f"An error occurred: {e}", exc_info=True)
+        sys.exit(1)
 
 if __name__ == '__main__':
-    n_workers = 3
-    
-    with LocalCluster(n_workers=n_workers, threads_per_worker=2, memory_limit='6GiB') as cluster:
-        client = Client(cluster)
-        print(f"LocalCluster started with {n_workers} workers")
-        main()
-        client.close()
+    config = load_config()
+    log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+    os.makedirs(log_dir, exist_ok=True)
+    logger = make_logger('converter', f'{log_dir}/converter.log')
+    main()

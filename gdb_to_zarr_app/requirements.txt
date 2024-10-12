@@ -1,0 +1,17 @@
+fiona
+pandas
+geopandas
+rasterio
+zarr
+xarray
+numpy
+tqdm
+urllib3
+dask
+shapely
+rtree
+pyproj
+affine
+psutil
+memory_profiler
+PyYAML

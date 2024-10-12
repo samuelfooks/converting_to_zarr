@@ -1,0 +1,8 @@
+zipurl: 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_human_activities/energy/wind_farms_points/EMODnet_HA_Energy_WindFarms_20240508.zip'
+geodatabase: 'EMODnet_HA_Energy_WindFarms_20240508.gdb'
+layer_index: 1
+variables: 
+  - 'COUNTRY'
+  - 'POWER_MW'
+  - 'STATUS'
+resolution: 0.01
