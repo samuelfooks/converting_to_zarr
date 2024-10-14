@@ -13,6 +13,11 @@ rasterstats
 ipykernel
 dask-geopandas
 dask[distributed]
+rtree
+Affine
+psutil
+memory_profiler
+snakeviz
 Affine
 scipy
 rtree

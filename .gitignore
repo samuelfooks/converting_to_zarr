@@ -6,6 +6,8 @@
 *tif.ovr
 *.xml
 *.zip
+*.log
+*.dat
 *.prof
 
 
