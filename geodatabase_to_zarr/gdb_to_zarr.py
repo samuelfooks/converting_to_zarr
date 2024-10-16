@@ -226,19 +226,27 @@ class ZarrConverter:
 
 # zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_geology/seabed_substrate/multiscale_folk_5/EMODnet_GEO_Seabed_Substrate_All_Res.zip'
 # geodatabase = 'EMODnet_Seabed_Substrate_1M.gdb'
+# layer_index = 0
+# variables = ['Folk_5cl', 'Folk_5cl_txt']
+
 # Download the zip file
-zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_human_activities/energy/wind_farms_points/EMODnet_HA_Energy_WindFarms_20240508.zip'
-geodatabase = 'EMODnet_HA_Energy_WindFarms_20240508.gdb'
-layer_index = 1
+# zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_native/emodnet_human_activities/energy/wind_farms_points/EMODnet_HA_Energy_WindFarms_20240508.zip'
+# geodatabase = 'EMODnet_HA_Energy_WindFarms_20240508.gdb'
+# layer_index = 1
+
+zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_seabed_habitats/12550/EUSeaMap_2023_MediterraneanSea.zip'
+geodatabase = 'EUSeaMap_2023_MediterraneanSea.gdb'
+layer_index = 0
+variables = ['Biozone', 'ModelCode']
 
 # zipurl = 'https://s3.waw3-1.cloudferro.com/emodnet/emodnet_seabed_habitats/12549/EUSeaMap_2023.zip'
 # geodatabase = 'EUSeaMap_2023.gdb'
 # layer_index = 0
+# variables = ['Biozone', 'ModelCode']
+
 # resolution ~1 km
 resolution = 0.01
 
-# for specific columns/variables
-variables = []
 
 # establish a conversion object, and process each geodatabase layer into zarr datasets
 converter = ZarrConverter(zipurl, geodatabase, layer_index, resolution=resolution, variables=variables)
